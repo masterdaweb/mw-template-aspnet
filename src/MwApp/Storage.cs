@@ -11,17 +11,22 @@ namespace MwApp;
 public sealed class Storage
 {
     readonly AmazonS3Client s3;
+    // Links are signed for the endpoint's own scheme: the SDK would make them
+    // https even for an http endpoint (a local MinIO, say).
+    readonly Protocol protocol;
 
     public string Bucket { get; }
 
     public Storage(IConfiguration config)
     {
         Bucket = config["MW_STORAGE_BUCKET"] ?? "";
+        var endpoint = config["MW_STORAGE_ENDPOINT"] ?? "https://s3.amazonaws.com";
+        protocol = endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? Protocol.HTTP : Protocol.HTTPS;
         s3 = new AmazonS3Client(
             new BasicAWSCredentials(config["MW_STORAGE_ACCESS_KEY_ID"] ?? "", config["MW_STORAGE_SECRET_ACCESS_KEY"] ?? ""),
             new AmazonS3Config
             {
-                ServiceURL = config["MW_STORAGE_ENDPOINT"] ?? "https://s3.amazonaws.com",
+                ServiceURL = endpoint,
                 AuthenticationRegion = config["MW_STORAGE_REGION"] ?? "auto",
                 ForcePathStyle = config["MW_STORAGE_FORCE_PATH_STYLE"] == "true",
                 // Checksums only where S3 requires them, as most S3-compatible stores expect.
@@ -47,6 +52,7 @@ public sealed class Storage
             BucketName = Bucket,
             Key = key,
             Verb = HttpVerb.GET,
+            Protocol = protocol,
             Expires = DateTime.UtcNow.AddMinutes(15),
             ResponseHeaderOverrides = { ContentDisposition = $"attachment; filename=\"{name.Replace("\"", "")}\"" },
         });
