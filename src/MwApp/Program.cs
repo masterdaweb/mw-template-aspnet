@@ -4,12 +4,20 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using MwApp;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // PostgreSQL, from the binding: ConnectionStrings__DefaultConnection, in
 // Npgsql's format, through the pooler (the release step gets the server).
-builder.Services.AddDbContext<AppDb>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// GSS encryption off: the database speaks TLS, never Kerberos, and Npgsql's
+// probe for it would log "Cannot load library libgssapi_krb5.so.2" on every
+// new connection, as the runtime image has no Kerberos.
+var database = new NpgsqlConnectionStringBuilder(builder.Configuration.GetConnectionString("DefaultConnection"))
+{
+    GssEncryptionMode = GssEncryptionMode.Disable,
+}.ConnectionString;
+builder.Services.AddDbContext<AppDb>(o => o.UseNpgsql(database));
 
 // Login cookies and form tokens are encrypted with keys every instance has
 // to share, across restarts and deploys: in the database, not on the
