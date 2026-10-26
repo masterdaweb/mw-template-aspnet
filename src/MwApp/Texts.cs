@@ -18,7 +18,9 @@ public sealed record Texts(
     string Next,
     string Step1,
     string Step2,
-    string Step3)
+    string Step3,
+    string NoDatabase,
+    string FormUnavailable)
 {
     static readonly Texts En = new(
         "en",
@@ -37,7 +39,9 @@ public sealed record Texts(
         "Next steps",
         "Make the code yours: in the console, open this project and follow “Your code” to copy it to your GitHub and connect it.",
         "Change the model in src/MwApp/AppDb.cs, add a migration (dotnet ef migrations add Name) and push: it runs once, before the new version takes traffic.",
-        "Add your own domain on the web service, under Domains.");
+        "Add your own domain on the web service, under Domains.",
+        "No PostgreSQL reachable. On Master da Web, open this service in the console and add a PostgreSQL database under Resources: it arrives as ConnectionStrings__DefaultConnection, and the next deploy runs the migrations.",
+        "Sending files needs the database: it keeps the keys the form is sealed with.");
 
     static readonly Texts Pt = new(
         "pt-BR",
@@ -56,7 +60,9 @@ public sealed record Texts(
         "Próximos passos",
         "Torne o código seu: no console, abra este projeto e siga “Seu código” para copiá-lo para o seu GitHub e conectá-lo.",
         "Altere o modelo em src/MwApp/AppDb.cs, crie uma migração (dotnet ef migrations add Nome) e faça push: ela roda uma vez, antes de a nova versão receber tráfego.",
-        "Adicione o seu domínio no serviço web, em Domínios.");
+        "Adicione o seu domínio no serviço web, em Domínios.",
+        "Nenhum PostgreSQL alcançável. Na Master da Web, abra este serviço no console e adicione um banco PostgreSQL em Recursos: ele chega como ConnectionStrings__DefaultConnection, e o próximo deploy roda as migrações.",
+        "O envio de arquivos precisa do banco: ele guarda as chaves que selam o formulário.");
 
     public static Texts For(string? acceptLanguage) =>
         (acceptLanguage ?? "").Split(',')[0].Trim().StartsWith("pt", StringComparison.OrdinalIgnoreCase) ? Pt : En;

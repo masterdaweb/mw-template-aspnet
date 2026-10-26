@@ -33,8 +33,15 @@ app.MapGet("/status.json", async (AppDb db, Storage storage, CancellationToken c
     return Results.Json(new { ok, checks }, statusCode: ok ? 200 : 503);
 });
 
-app.MapGet("/api/files", async (AppDb db, Storage storage, CancellationToken ct) =>
-    Results.Json(new { files = await Files(db, storage, ct) }));
+app.MapGet("/api/files", async (AppDb db, Storage storage, ILogger<Program> log, CancellationToken ct) =>
+{
+    try { return Results.Json(new { files = await Files(db, storage, ct) }); }
+    catch (Exception e)
+    {
+        log.LogError(e, "listing failed");
+        return Results.Json(new { error = "The database or the bucket is not reachable: see /status.json." }, statusCode: 503);
+    }
+});
 
 // For API clients: no browser session, so no form token to check.
 app.MapPost("/api/files", async (IFormFile? file, AppDb db, Storage storage, CancellationToken ct) =>
@@ -61,12 +68,17 @@ app.MapPost("/files", async (IFormFile? file, AppDb db, Storage storage, ILogger
     }
 });
 
-app.MapGet("/", async (HttpContext http, IAntiforgery antiforgery, AppDb db, Storage storage, CancellationToken ct) =>
+app.MapGet("/", async (HttpContext http, IAntiforgery antiforgery, AppDb db, Storage storage, ILogger<Program> log, CancellationToken ct) =>
 {
     var t = Texts.For(http.Request.Headers.AcceptLanguage);
     var checks = await Checks(db, storage, ct);
     var files = checks.Values.All(c => c.Ok) ? await Files(db, storage, ct) : new List<FileView>();
-    var token = antiforgery.GetAndStoreTokens(http);
+    // The form's token is sealed with the keys kept in the database: without
+    // it the page still renders, and says what to do.
+    AntiforgeryTokenSet? token = null;
+    if (checks["database"].Ok)
+        try { token = antiforgery.GetAndStoreTokens(http); }
+        catch (Exception e) { log.LogError(e, "form token"); }
     var sent = http.Request.Query["sent"].ToString();
     var error = http.Request.Query["error"].ToString();
     string E(string s) => WebUtility.HtmlEncode(s);
@@ -75,6 +87,10 @@ app.MapGet("/", async (HttpContext http, IAntiforgery antiforgery, AppDb db, Sto
         : error != "" ? $"""<p class="note bad" role="alert">{E(error == "empty" ? t.Empty : t.Failed)}</p>""" : "";
     var checkList = string.Join("\n", checks.Select(c =>
         $"""<li data-check="{c.Key}" data-ok="{(c.Value.Ok ? "true" : "false")}"><span class="dot {(c.Value.Ok ? "ok" : "bad")}"></span><span class="name">{labels[c.Key]}</span><span class="detail {(c.Value.Ok ? "" : "bad")}">{E(c.Value.Detail)}</span></li>"""));
+    var noDatabase = checks["database"].Ok ? "" : $"""<p class="note bad" role="alert" data-testid="no-database">{E(t.NoDatabase)}</p>""";
+    var form = token is null
+        ? $"""<p class="muted">{E(t.FormUnavailable)}</p>"""
+        : $"""<form method="post" action="/files" enctype="multipart/form-data"><input type="hidden" name="{E(token.FormFieldName)}" value="{E(token.RequestToken ?? "")}"><input type="file" name="file" required aria-label="{E(t.File)}"><button type="submit">{E(t.Submit)}</button></form>""";
     var fileList = files.Count > 0
         ? $"""<ul class="files" data-testid="uploads">{string.Concat(files.Select(f => $"""<li><a href="{E(f.Url)}">{E(f.Name)}</a><span>{Size(f.Size)} · {E(t.Download)}</span></li>"""))}</ul>"""
         : $"""<p class="muted">{E(t.None)}</p>""";
@@ -88,9 +104,10 @@ app.MapGet("/", async (HttpContext http, IAntiforgery antiforgery, AppDb db, Sto
         <p class="lead">{E(t.Lead)}</p>
         <section><h2>{E(t.Reaches)}</h2><ul class="checks" data-testid="checks">
         {checkList}
-        </ul></section>
+        </ul>
+        {noDatabase}</section>
         <section><h2>{E(t.Send)}</h2>
-        <form method="post" action="/files" enctype="multipart/form-data"><input type="hidden" name="{E(token.FormFieldName)}" value="{E(token.RequestToken ?? "")}"><input type="file" name="file" required aria-label="{E(t.File)}"><button type="submit">{E(t.Submit)}</button></form>
+        {form}
         {note}
         {fileList}
         <p class="muted"><a href="/api/files">GET /api/files</a> — {E(t.Api)}</p>

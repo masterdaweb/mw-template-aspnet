@@ -1,5 +1,7 @@
 # ASP.NET Core + PostgreSQL on Master da Web
 
+[![Deploy on Master da Web](https://panelv2.masterdaweb.com/deploy/button-en.svg)](https://panelv2.masterdaweb.com/templates/aspnet)
+
 An ASP.NET Core (.NET 10) app with PostgreSQL through Entity Framework Core, its migrations on every deploy, private files on Object Storage and the login keys kept in the database.
 
 | Service | What it runs |
